@@ -1,0 +1,31 @@
+#!/usr/bin/env bash -ex
+
+ISUCON_GIT_DIR=~/git
+DEPLOY_SCRIPT_SUM="$(md5sum "$0")"
+
+cd ${ISUCON_GIT_DIR}
+git stash save -u tmp
+git pull --rebase
+
+if [[ "_${DEPLOY_SCRIPT_SUM}" != "_$(md5sum "$0")"]]; then
+  echo 'bin/deploy updated!!!'
+  exit 1
+fi
+
+# systemd
+#sudo cp ${ISUCON_GIT_DIR}/systemd/* /etc/systemd/system/
+#sudo systemctl daemon-reload
+#sudo systemctl restart isucon.service
+
+# nginx
+#sudo cp ${ISUCON_GIT_DIR}/nginx/nginx.conf /etc/nginx/nginx.conf
+#sudo cp ${ISUCON_GIT_DIR}/nginx/conf.d/* /etc/nginx/conf.d/
+#sudo cp ${ISUCON_GIT_DIR}/nginx/sites-available/* /etc/nginx/sites-available/
+#sudo nginx -t
+#sudo nginx -s reload
+
+# mysql
+#sudo cp ${ISUCON_GIT_DIR}/mysql/mysql.cnf /etc/mysql/mysql.cnf
+#sudo cp ${ISUCON_GIT_DIR}/mysql/conf.d/* /etc/mysql/conf.d/
+#sudo cp ${ISUCON_GIT_DIR}/mysql/mysql.conf.d/* /etc/mysql/mysql.conf.d/
+#sudo systemctl restart mysql
