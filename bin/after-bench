@@ -1,0 +1,9 @@
+#!/usr/bin/env bash -ex
+
+ISUCON_GIT_DIR=~/git
+
+cd ${ISUCON_GIT_DIR}
+
+# 各種ログを解析用にまとめて出力
+sudo alp -c alp.yml ltsv
+sudo pt-query-digest /var/log/mysql/slow.log
