@@ -651,9 +651,13 @@ module Isuports
         end
 
         # 更新時のみexclusive lockに変更
-        self.class.trace_execution_scoped(['#score :sqlite3']) do
+        self.class.trace_execution_scoped(['#score :transaction.exclusive']) do
           tenant_db.transaction(:exclusive)
+        end
+        self.class.trace_execution_scoped(['#score :transaction.exec delete']) do
           tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
+        end
+        self.class.trace_execution_scoped(['#score :transaction.exec insert']) do
           query = 'INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES '
           player_score_rows.each do |ps|
             query += "(\"#{ps.id}\", \"#{ps.tenant_id}\", \"#{ps.player_id}\", \"#{ps.competition_id}\", #{ps.score}, #{ps.row_num}, #{ps.created_at}, #{ps.updated_at}),"
@@ -661,6 +665,8 @@ module Isuports
           end
           query.chop!
           tenant_db.execute(query)
+        end
+        self.class.trace_execution_scoped(['#score :transaction.commit']) do
           tenant_db.commit()
         end
 
