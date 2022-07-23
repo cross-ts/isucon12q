@@ -256,22 +256,6 @@ module Isuports
         end
       end
 
-      # 排他ロックのためのファイル名を生成する
-      def lock_file_path(id)
-        tenant_db_dir = ENV.fetch('ISUCON_TENANT_DB_DIR', '../tenant_db')
-        File.join(tenant_db_dir, "#{id}.lock")
-      end
-
-      # 排他ロックする
-      def flock_by_tenant_id(tenant_id, &block)
-        path = lock_file_path(tenant_id)
-
-        File.open(path, File::RDONLY | File::CREAT, 0600) do |f|
-          f.flock(File::LOCK_EX)
-          block.call
-        end
-      end
-
       # テナント名が規則に沿っているかチェックする
       def validate_tenant_name!(name)
         unless TENANT_NAME_REGEXP.match?(name)
@@ -305,40 +289,38 @@ module Isuports
         end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        #flock_by_tenant_id(tenant_id) do
-          tenant_db.transaction()
-          # スコアを登録した参加者のIDを取得する
-          tenant_db.execute('SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?', [tenant_id, comp.id]) do |row|
-            pid = row.fetch('player_id')
-            # スコアが登録されている参加者
-            billing_map[pid] = 'player'
-          end
-          tenant_db.commit()
+        tenant_db.transaction()
+        # スコアを登録した参加者のIDを取得する
+        tenant_db.execute('SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?', [tenant_id, comp.id]) do |row|
+          pid = row.fetch('player_id')
+          # スコアが登録されている参加者
+          billing_map[pid] = 'player'
+        end
+        tenant_db.commit()
 
-          # 大会が終了している場合のみ請求金額が確定するので計算する
-          player_count = 0
-          visitor_count = 0
-          if comp.finished_at
-            billing_map.each_value do |category|
-              case category
-              when 'player'
-                player_count += 1
-              when 'visitor'
-                visitor_count += 1
-              end
+        # 大会が終了している場合のみ請求金額が確定するので計算する
+        player_count = 0
+        visitor_count = 0
+        if comp.finished_at
+          billing_map.each_value do |category|
+            case category
+            when 'player'
+              player_count += 1
+            when 'visitor'
+              visitor_count += 1
             end
           end
+        end
 
-          BillingReport.new(
-            competition_id: comp.id,
-            competition_title: comp.title,
-            player_count:,
-            visitor_count:,
-            billing_player_yen: 100 * player_count, # スコアを登録した参加者は100円
-            billing_visitor_yen: 10 * visitor_count,  # ランキングを閲覧だけした(スコアを登録していない)参加者は10円
-            billing_yen: 100 * player_count + 10 * visitor_count,
-          )
-        #end
+        BillingReport.new(
+          competition_id: comp.id,
+          competition_title: comp.title,
+          player_count:,
+          visitor_count:,
+          billing_player_yen: 100 * player_count, # スコアを登録した参加者は100円
+          billing_visitor_yen: 10 * visitor_count,  # ランキングを閲覧だけした(スコアを登録していない)参加者は10円
+          billing_yen: 100 * player_count + 10 * visitor_count,
+        )
       end
 
       def competitions_handler(v, tenant_db)
@@ -625,46 +607,44 @@ module Isuports
         end
 
         # DELETEしたタイミングで参照が来ると空っぽのランキングになるのでロックする
-        #flock_by_tenant_id(v.tenant_id) do
-          player_score_rows = csv.map.with_index do |row, row_num|
-            if row.size != 2
-              raise "row must have two columns: #{row}"
-            end
-            player_id, score_str = *row.values_at('player_id', 'score')
-            unless retrieve_player(tenant_db, player_id)
-              # 存在しない参加者が含まれている
-              raise HttpError.new(400, "player not found: #{player_id}")
-            end
-            score = Integer(score_str, 10)
-            id = dispense_id
-            now = Time.now.to_i
-            PlayerScoreRow.new(
-              id:,
-              tenant_id: v.tenant_id,
-              player_id:,
-              competition_id:,
-              score:,
-              row_num:,
-              created_at: now,
-              updated_at: now,
-            )
+        player_score_rows = csv.map.with_index do |row, row_num|
+          if row.size != 2
+            raise "row must have two columns: #{row}"
           end
-
-          # 更新時のみexclusive lockに変更
-          tenant_db.transaction(:exclusive)
-          tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
-          player_score_rows.each do |ps|
-            tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+          player_id, score_str = *row.values_at('player_id', 'score')
+          unless retrieve_player(tenant_db, player_id)
+            # 存在しない参加者が含まれている
+            raise HttpError.new(400, "player not found: #{player_id}")
           end
-          tenant_db.commit()
-
-          json(
-            status: true,
-            data: {
-              rows: player_score_rows.size,
-            },
+          score = Integer(score_str, 10)
+          id = dispense_id
+          now = Time.now.to_i
+          PlayerScoreRow.new(
+            id:,
+            tenant_id: v.tenant_id,
+            player_id:,
+            competition_id:,
+            score:,
+            row_num:,
+            created_at: now,
+            updated_at: now,
           )
-        #end
+        end
+
+        # 更新時のみexclusive lockに変更
+        tenant_db.transaction(:exclusive)
+        tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
+        player_score_rows.each do |ps|
+          tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+        end
+        tenant_db.commit()
+
+        json(
+          status: true,
+          data: {
+            rows: player_score_rows.size,
+          },
+        )
       end
     end
 
@@ -721,36 +701,34 @@ module Isuports
         end
         competitions = tenant_db.execute('SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC', [v.tenant_id]).map { |row| CompetitionRow.new(row) }
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        #flock_by_tenant_id(v.tenant_id) do
         tenant_db.transaction()
-          player_score_rows = competitions.filter_map do |c|
-            # 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-            row = tenant_db.get_first_row('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1', [v.tenant_id, c.id, player.id])
-            if row
-              PlayerScoreRow.new(row)
-            else
-              # 行がない = スコアが記録されてない
-              nil
-            end
+        player_score_rows = competitions.filter_map do |c|
+          # 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
+          row = tenant_db.get_first_row('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1', [v.tenant_id, c.id, player.id])
+          if row
+            PlayerScoreRow.new(row)
+          else
+            # 行がない = スコアが記録されてない
+            nil
           end
-        tenant_db.commit()
+        end
+      tenant_db.commit()
 
-          scores = player_score_rows.map do |ps|
-            comp = retrieve_competition(tenant_db, ps.competition_id)
-            {
-              competition_title: comp.title,
-              score: ps.score,
-            }
-          end
+        scores = player_score_rows.map do |ps|
+          comp = retrieve_competition(tenant_db, ps.competition_id)
+          {
+            competition_title: comp.title,
+            score: ps.score,
+          }
+        end
 
-          json(
-            status: true,
-            data: {
-              player: player.to_h.slice(:id, :display_name, :is_disqualified),
-              scores:,
-            },
-          )
-        #end
+        json(
+          status: true,
+          data: {
+            player: player.to_h.slice(:id, :display_name, :is_disqualified),
+            scores:,
+          },
+        )
       end
     end
 
@@ -779,71 +757,55 @@ module Isuports
           end
         end
 
-        tenant = nil
-        now = nil
-        rank_after = nil
-        self.class.trace_execution_scoped(['#raking :Before flock']) do
-          now = Time.now.to_i
-          tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
-          admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
+        now = Time.now.to_i
+        tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
+        admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
 
-          rank_after_str = params[:rank_after]
-          rank_after =
-            if rank_after_str
-              Integer(rank_after_str, 10)
-            else
-              0
-            end
-        end
+        rank_after_str = params[:rank_after]
+        rank_after =
+          if rank_after_str
+            Integer(rank_after_str, 10)
+          else
+            0
+          end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        rows = []
-        self.class.trace_execution_scoped(['#raking :flock']) do
-          #flock_by_tenant_id(v.tenant_id) do
-          tenant_db.transaction()
-            rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
-          tenant_db.commit()
-          #end
-        end
+        tenant_db.transaction()
+        rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
+        tenant_db.commit()
         ranks = []
         scored_player_set = Set.new
-        self.class.trace_execution_scoped(['#raking :creat_score']) do
-          rows.each do |row|
-            ps = PlayerScoreRow.new(row)
-            # player_scoreが同一player_id内ではrow_numの降順でソートされているので
-            # 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
-            if scored_player_set.member?(ps.player_id)
-              next
-            end
-            scored_player_set.add(ps.player_id)
-            player = retrieve_player(tenant_db, ps.player_id)
-            ranks.push(CompetitionRank.new(
-              score: ps.score,
-              player_id: player.id,
-              player_display_name: player.display_name,
-              row_num: ps.row_num,
-            ))
+        rows.each do |row|
+          ps = PlayerScoreRow.new(row)
+          # player_scoreが同一player_id内ではrow_numの降順でソートされているので
+          # 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
+          if scored_player_set.member?(ps.player_id)
+            next
           end
+          scored_player_set.add(ps.player_id)
+          player = retrieve_player(tenant_db, ps.player_id)
+          ranks.push(CompetitionRank.new(
+            score: ps.score,
+            player_id: player.id,
+            player_display_name: player.display_name,
+            row_num: ps.row_num,
+          ))
         end
-        self.class.trace_execution_scoped(['#raking :flock sort!']) do
-          ranks.sort! do |a, b|
-            if a.score == b.score
-              a.row_num <=> b.row_num
-            else
-              b.score <=> a.score
-            end
+        ranks.sort! do |a, b|
+          if a.score == b.score
+            a.row_num <=> b.row_num
+          else
+            b.score <=> a.score
           end
         end
         paged_ranks = []
-        self.class.trace_execution_scoped(['#raking :flock paged']) do
-          paged_ranks = ranks.drop(rank_after).take(100).map.with_index do |rank, i|
-            {
-              rank: rank_after + i + 1,
-              score: rank.score,
-              player_id: rank.player_id,
-              player_display_name: rank.player_display_name,
-            }
-          end
+        paged_ranks = ranks.drop(rank_after).take(100).map.with_index do |rank, i|
+          {
+            rank: rank_after + i + 1,
+            score: rank.score,
+            player_id: rank.player_id,
+            player_display_name: rank.player_display_name,
+          }
         end
 
         json(
