@@ -792,13 +792,13 @@ module Isuports
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
         rows = []
         self.class.trace_execution_scoped(['#raking :flock']) do
-        flock_by_tenant_id(v.tenant_id) do
-          rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
+          flock_by_tenant_id(v.tenant_id) do
+            rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
+          end
         end
-        end
-          ranks = []
-          scored_player_set = Set.new
-          self.class.trace_execution_scoped(['#raking :creat_score']) do
+        ranks = []
+        scored_player_set = Set.new
+        self.class.trace_execution_scoped(['#raking :creat_score']) do
           rows.each do |row|
             ps = PlayerScoreRow.new(row)
             # player_scoreが同一player_id内ではrow_numの降順でソートされているので
@@ -815,8 +815,8 @@ module Isuports
               row_num: ps.row_num,
             ))
           end
-          end
-          self.class.trace_execution_scoped(['#raking :flock sort!']) do
+        end
+        self.class.trace_execution_scoped(['#raking :flock sort!']) do
           ranks.sort! do |a, b|
             if a.score == b.score
               a.row_num <=> b.row_num
@@ -824,9 +824,9 @@ module Isuports
               b.score <=> a.score
             end
           end
-          end
-          paged_ranks = []
-          self.class.trace_execution_scoped(['#raking :flock paged']) do
+        end
+        paged_ranks = []
+        self.class.trace_execution_scoped(['#raking :flock paged']) do
           paged_ranks = ranks.drop(rank_after).take(100).map.with_index do |rank, i|
             {
               rank: rank_after + i + 1,
@@ -835,19 +835,19 @@ module Isuports
               player_display_name: rank.player_display_name,
             }
           end
-          end
+        end
 
-          json(
-            status: true,
-            data: {
-              competition: {
-                id: competition.id,
-                title: competition.title,
-                is_finished: !competition.finished_at.nil?,
-              },
-              ranks: paged_ranks,
+        json(
+          status: true,
+          data: {
+            competition: {
+              id: competition.id,
+              title: competition.title,
+              is_finished: !competition.finished_at.nil?,
             },
-          )
+            ranks: paged_ranks,
+          },
+        )
       end
     end
 
