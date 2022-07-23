@@ -10,7 +10,7 @@ module Mysql2
     NR_NOTICE_STATEMENTS_REGEX = /#{NR_NOTICE_STATEMENTS.join('|')}/i
 
     # TODO: 競技時にテーブル名を追記する
-    NR_NOTICE_TABLES = %i(tenant id_generator visit_history)
+    NR_NOTICE_TABLES = %i(tenant id_generator visit_history visit_history2)
     NR_NOTICE_TABLES_REGEX = /#{NR_NOTICE_TABLES.join('|')}/i
 
     # XXX:
