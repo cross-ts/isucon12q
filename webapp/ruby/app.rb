@@ -647,16 +647,30 @@ module Isuports
         end
 
         # 更新時のみexclusive lockに変更
-        tenant_db.transaction(:exclusive)
-        tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
-        query = 'INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES '
-        player_score_rows.each do |ps|
-          query += "(\"#{ps.id}\", \"#{ps.tenant_id}\", \"#{ps.player_id}\", \"#{ps.competition_id}\", #{ps.score}, #{ps.row_num}, #{ps.created_at}, #{ps.updated_at}),"
-          #tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+        begin
+          tenant_db.transaction(:exclusive)
+          tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
+          query = 'INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES '
+          player_score_rows.each do |ps|
+            query += "(\"#{ps.id}\", \"#{ps.tenant_id}\", \"#{ps.player_id}\", \"#{ps.competition_id}\", #{ps.score}, #{ps.row_num}, #{ps.created_at}, #{ps.updated_at}),"
+            #tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+          end
+          query.chop!
+          tenant_db.execute(query)
+          tenant_db.commit()
+        rescue => e
+          # もう一回やって欲しい
+          tenant_db.transaction(:exclusive)
+          tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
+          query = 'INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES '
+          player_score_rows.each do |ps|
+            query += "(\"#{ps.id}\", \"#{ps.tenant_id}\", \"#{ps.player_id}\", \"#{ps.competition_id}\", #{ps.score}, #{ps.row_num}, #{ps.created_at}, #{ps.updated_at}),"
+            #tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+          end
+          query.chop!
+          tenant_db.execute(query)
+          tenant_db.commit()
         end
-        query.chop!
-        tenant_db.execute(query)
-        tenant_db.commit()
 
         json(
           status: true,
