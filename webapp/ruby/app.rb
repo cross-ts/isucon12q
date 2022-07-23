@@ -542,7 +542,9 @@ module Isuports
 
         now = Time.now.to_i
         id = dispense_id
+        tenant_db.transaction(:exclusive)
         tenant_db.execute('INSERT INTO competition (id, tenant_id, title, finished_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [id, v.tenant_id, title, nil, now, now])
+        tenant_db.commit()
 
         json(
           status: true,
@@ -572,7 +574,9 @@ module Isuports
         end
 
         now = Time.now.to_i
+        tenant_db.transaction()
         tenant_db.execute('UPDATE competition SET finished_at = ?, updated_at = ? WHERE id = ?', [now, now, id])
+        tenant_db.commit()
         json(
           status: true,
         )
@@ -660,10 +664,12 @@ module Isuports
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
         reports = []
+        tenant_db.transaction()
         tenant_db.execute('SELECT * FROM competition WHERE tenant_id=? ORDER BY created_at DESC', [v.tenant_id]) do |row|
           comp = CompetitionRow.new(row)
           reports.push(billing_report_by_competition(tenant_db, v.tenant_id, comp.id).to_h)
         end
+        tenant_db.commit()
         json(
           status: true,
           data: {
@@ -681,7 +687,9 @@ module Isuports
       end
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
+        tenant_db.transaction()
         competitions_handler(v, tenant_db)
+        tenant_db.commit()
       end
     end
 
@@ -695,6 +703,7 @@ module Isuports
       end
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
+        tenant_db.transaction()
         authorize_player!(tenant_db, v.player_id)
 
         player_id = params[:player_id]
@@ -704,7 +713,6 @@ module Isuports
         end
         competitions = tenant_db.execute('SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC', [v.tenant_id]).map { |row| CompetitionRow.new(row) }
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        tenant_db.transaction()
         player_score_rows = competitions.filter_map do |c|
           # 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
           row = tenant_db.get_first_row('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1', [v.tenant_id, c.id, player.id])
@@ -715,7 +723,7 @@ module Isuports
             nil
           end
         end
-      tenant_db.commit()
+        tenant_db.commit()
 
         scores = player_score_rows.map do |ps|
           comp = retrieve_competition(tenant_db, ps.competition_id)
@@ -745,6 +753,7 @@ module Isuports
       end
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
+        tenant_db.transaction()
         self.class.trace_execution_scoped(['#raking :authorize_player!']) do
           authorize_player!(tenant_db, v.player_id)
         end
@@ -774,7 +783,6 @@ module Isuports
           end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        tenant_db.transaction()
         rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
         tenant_db.commit()
         ranks = []
