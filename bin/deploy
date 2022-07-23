@@ -25,6 +25,8 @@ sudo nginx -t
 sudo nginx -s reload
 
 # mysql
+cp ${ISUCON_GIT_DIR}/webapp/sql/init.sh /home/isucon/webapp/sql/
+cp ${ISUCON_GIT_DIR}/webapp/sql/init.sql /home/isucon/webapp/sql/
 sudo cp ${ISUCON_GIT_DIR}/mysql/mysql.cnf /etc/mysql/mysql.cnf
 sudo cp ${ISUCON_GIT_DIR}/mysql/conf.d/* /etc/mysql/conf.d/
 sudo cp ${ISUCON_GIT_DIR}/mysql/mysql.conf.d/* /etc/mysql/mysql.conf.d/
