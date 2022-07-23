@@ -771,6 +771,9 @@ module Isuports
           end
         end
 
+        tenant = nil
+        now = nil
+        rank_after = nil
         self.class.trace_execution_scoped(['#raking :Before flock']) do
           now = Time.now.to_i
           tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
@@ -817,6 +820,7 @@ module Isuports
             end
           end
           end
+          paged_ranks = []
           self.class.trace_execution_scoped(['#raking :flock paged']) do
           paged_ranks = ranks.drop(rank_after).take(100).map.with_index do |rank, i|
             {
