@@ -757,32 +757,40 @@ module Isuports
       end
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
-        authorize_player!(tenant_db, v.player_id)
+        self.class.trace_execution_scoped(['#raking :authorize_player!']) do
+          authorize_player!(tenant_db, v.player_id)
+        end
 
         competition_id = params[:competition_id]
 
         # 大会の存在確認
-        competition = retrieve_competition(tenant_db, competition_id)
-        unless competition
-          raise HttpError.new(404, 'competition not found')
+        self.class.trace_execution_scoped(['#raking :retrieve_competition']) do
+          competition = retrieve_competition(tenant_db, competition_id)
+          unless competition
+            raise HttpError.new(404, 'competition not found')
+          end
         end
 
-        now = Time.now.to_i
-        tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
-        admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
+        self.class.trace_execution_scoped(['#raking :Before flock']) do
+          now = Time.now.to_i
+          tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
+          admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
 
-        rank_after_str = params[:rank_after]
-        rank_after =
-          if rank_after_str
-            Integer(rank_after_str, 10)
-          else
-            0
-          end
+          rank_after_str = params[:rank_after]
+          rank_after =
+            if rank_after_str
+              Integer(rank_after_str, 10)
+            else
+              0
+            end
+        end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
+        self.class.trace_execution_scoped(['#raking :flock']) do
         flock_by_tenant_id(v.tenant_id) do
           ranks = []
           scored_player_set = Set.new
+          self.class.trace_execution_scoped(['#raking :flock execute']) do
           tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id]) do |row|
             ps = PlayerScoreRow.new(row)
             # player_scoreが同一player_id内ではrow_numの降順でソートされているので
@@ -799,6 +807,8 @@ module Isuports
               row_num: ps.row_num,
             ))
           end
+          end
+          self.class.trace_execution_scoped(['#raking :flock sort!']) do
           ranks.sort! do |a, b|
             if a.score == b.score
               a.row_num <=> b.row_num
@@ -806,6 +816,8 @@ module Isuports
               b.score <=> a.score
             end
           end
+          end
+          self.class.trace_execution_scoped(['#raking :flock paged']) do
           paged_ranks = ranks.drop(rank_after).take(100).map.with_index do |rank, i|
             {
               rank: rank_after + i + 1,
@@ -813,6 +825,7 @@ module Isuports
               player_id: rank.player_id,
               player_display_name: rank.player_display_name,
             }
+          end
           end
 
           json(
@@ -826,6 +839,7 @@ module Isuports
               ranks: paged_ranks,
             },
           )
+        end
         end
       end
     end

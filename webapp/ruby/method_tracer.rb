@@ -13,7 +13,7 @@ module ModuleNameHere
     add_method_tracer :parse_viewer
     add_method_tracer :retrieve_tenant_row_from_header
     add_method_tracer :retrieve_player
-    add_method_tracer :authorize_player
+    add_method_tracer :authorize_player!
     add_method_tracer :retrieve_competition
     add_method_tracer :lock_file_path
     add_method_tracer :flock_by_tenant_id
