@@ -1,6 +1,6 @@
 require 'new_relic/agent/method_tracer'
 
-module ModuleNameHere
+module Isuports
   class App < Sinatra::Base
     include ::NewRelic::Agent::MethodTracer
 
