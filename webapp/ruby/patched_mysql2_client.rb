@@ -6,11 +6,11 @@ module Mysql2
   class Client
     alias_method :original_query, :query
 
-    NR_NOTICE_STATEMENTS = %i(select insert update delete begin commit rollback truncate)
+    NR_NOTICE_STATEMENTS = %i(select insert update delete begin commit rollback truncate REPLACE)
     NR_NOTICE_STATEMENTS_REGEX = /#{NR_NOTICE_STATEMENTS.join('|')}/i
 
     # TODO: 競技時にテーブル名を追記する
-    NR_NOTICE_TABLES = %i()
+    NR_NOTICE_TABLES = %i(tenant id_generator visit_history)
     NR_NOTICE_TABLES_REGEX = /#{NR_NOTICE_TABLES.join('|')}/i
 
     # XXX:
