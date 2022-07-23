@@ -609,46 +609,55 @@ module Isuports
           )
         end
 
-        csv_file = params[:scores][:tempfile]
-        csv_file.set_encoding(Encoding::UTF_8)
-        csv = CSV.new(csv_file, headers: true, return_headers: true)
-        csv.readline
-        if csv.headers != ['player_id', 'score']
-          raise HttpError.new(400, 'invalid CSV headers')
+        csv_file = nil
+        csv = nil
+        self.class.trace_execution_scoped(['#score :csv']) do
+          csv_file = params[:scores][:tempfile]
+          csv_file.set_encoding(Encoding::UTF_8)
+          csv = CSV.new(csv_file, headers: true, return_headers: true)
+          csv.readline
+          if csv.headers != ['player_id', 'score']
+            raise HttpError.new(400, 'invalid CSV headers')
+          end
         end
 
         # DELETEしたタイミングで参照が来ると空っぽのランキングになるのでロックする
-        player_score_rows = csv.map.with_index do |row, row_num|
-          if row.size != 2
-            raise "row must have two columns: #{row}"
+        player_score_rows = []
+        self.class.trace_execution_scoped(['#score :player_score_row']) do
+          player_score_rows = csv.map.with_index do |row, row_num|
+            if row.size != 2
+              raise "row must have two columns: #{row}"
+            end
+            player_id, score_str = *row.values_at('player_id', 'score')
+            unless retrieve_player(tenant_db, player_id)
+              # 存在しない参加者が含まれている
+              raise HttpError.new(400, "player not found: #{player_id}")
+            end
+            score = Integer(score_str, 10)
+            id = dispense_id
+            now = Time.now.to_i
+            PlayerScoreRow.new(
+              id:,
+              tenant_id: v.tenant_id,
+              player_id:,
+              competition_id:,
+              score:,
+              row_num:,
+              created_at: now,
+              updated_at: now,
+            )
           end
-          player_id, score_str = *row.values_at('player_id', 'score')
-          unless retrieve_player(tenant_db, player_id)
-            # 存在しない参加者が含まれている
-            raise HttpError.new(400, "player not found: #{player_id}")
-          end
-          score = Integer(score_str, 10)
-          id = dispense_id
-          now = Time.now.to_i
-          PlayerScoreRow.new(
-            id:,
-            tenant_id: v.tenant_id,
-            player_id:,
-            competition_id:,
-            score:,
-            row_num:,
-            created_at: now,
-            updated_at: now,
-          )
         end
 
         # 更新時のみexclusive lockに変更
-        tenant_db.transaction(:exclusive)
-        tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
-        player_score_rows.each do |ps|
-          tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+        self.class.trace_execution_scoped(['#score :sqlite3']) do
+          tenant_db.transaction(:exclusive)
+          tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
+          player_score_rows.each do |ps|
+            tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
+          end
+          tenant_db.commit()
         end
-        tenant_db.commit()
 
         json(
           status: true,
