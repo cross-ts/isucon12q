@@ -16,7 +16,7 @@ RUN mkdir -p /home/isucon/webapp/ruby
 WORKDIR /home/isucon/webapp/ruby
 
 ADD Gemfile Gemfile.lock /home/isucon/webapp/ruby/
-RUN bundle config set deployment true && bundle config set without development && bundle config set path /home/isucon/tmp/ruby/gems
+#RUN bundle config set deployment true && bundle config set without development && bundle config set path /home/isucon/tmp/ruby/gems
 
 COPY --chown=isucon:isucon ./ /home/isucon/webapp/ruby
 CMD ["/home/isucon/webapp/ruby/start-ruby.sh"]
