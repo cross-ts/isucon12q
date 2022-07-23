@@ -799,7 +799,7 @@ module Isuports
           ranks = []
           scored_player_set = Set.new
           self.class.trace_execution_scoped(['#raking :creat_score']) do
-          rows do |row|
+          rows.each do |row|
             ps = PlayerScoreRow.new(row)
             # player_scoreが同一player_id内ではrow_numの降順でソートされているので
             # 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
