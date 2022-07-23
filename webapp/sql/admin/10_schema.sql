@@ -31,6 +31,7 @@ CREATE TABLE `visit_history` (
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 ALTER TABLE visit_history ADD INDEX idx_2 (tenant_id, competition_id, player_id, created_at);
 
+DROP TABLE IF EXISTS `visit_history2`;
 CREATE TABLE `visit_history2` (
   `player_id` varchar(255) NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
