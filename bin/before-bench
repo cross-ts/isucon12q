@@ -1,9 +1,9 @@
-#!/usr/bin/env bash -ex
+#!/usr/bin/env bash
 
 ISUCON_GIT_DIR=~/git
 
 cd ${ISUCON_GIT_DIR}
 
 # delete logs
-#: | sudo tee /var/log/nginx/access.log
-#: | sudo tee /var/log/mysql/slow.log
+: | sudo tee /var/log/nginx/access.log
+: | sudo tee /var/log/mysql/slow.log
