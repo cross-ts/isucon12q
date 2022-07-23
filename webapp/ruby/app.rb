@@ -515,10 +515,8 @@ module Isuports
         player_id = params[:player_id]
 
         now = Time.now.to_i
-        tenant_db.transaction(:exclusive)
         tenant_db.execute('UPDATE player SET is_disqualified = ?, updated_at = ? WHERE id = ?', [1, now, player_id])
         player = retrieve_player(tenant_db, player_id)
-        tenant_db.commit()
         unless player
           # 存在しないプレイヤー
           raise HttpError.new(404, 'player not found')
@@ -579,9 +577,7 @@ module Isuports
         end
 
         now = Time.now.to_i
-        tenant_db.transaction(:exclusive)
         tenant_db.execute('UPDATE competition SET finished_at = ?, updated_at = ? WHERE id = ?', [now, now, id])
-        tenant_db.commit()
         json(
           status: true,
         )
