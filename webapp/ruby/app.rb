@@ -790,12 +790,16 @@ module Isuports
         end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
+        rows = []
         self.class.trace_execution_scoped(['#raking :flock']) do
         flock_by_tenant_id(v.tenant_id) do
+          rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
+        end
+        end
           ranks = []
           scored_player_set = Set.new
-          self.class.trace_execution_scoped(['#raking :flock execute']) do
-          tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id]) do |row|
+          self.class.trace_execution_scoped(['#raking :creat_score']) do
+          rows do |row|
             ps = PlayerScoreRow.new(row)
             # player_scoreが同一player_id内ではrow_numの降順でソートされているので
             # 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
@@ -844,8 +848,6 @@ module Isuports
               ranks: paged_ranks,
             },
           )
-        end
-        end
       end
     end
 
