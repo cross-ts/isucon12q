@@ -483,6 +483,7 @@ module Isuports
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
         display_names = params[:display_name]
 
+        tenant_db.transaction(:exclusive)
         players = display_names.map do |display_name|
           id = dispense_id
 
@@ -491,6 +492,7 @@ module Isuports
           player = retrieve_player(tenant_db, id)
           player.to_h.slice(:id, :display_name, :is_disqualified)
         end
+        tenant_db.commit()
 
         json(
           status: true,
@@ -512,8 +514,10 @@ module Isuports
         player_id = params[:player_id]
 
         now = Time.now.to_i
+        tenant_db.transaction(:exclusive)
         tenant_db.execute('UPDATE player SET is_disqualified = ?, updated_at = ? WHERE id = ?', [1, now, player_id])
         player = retrieve_player(tenant_db, player_id)
+        tenant_db.commit()
         unless player
           # 存在しないプレイヤー
           raise HttpError.new(404, 'player not found')
@@ -542,7 +546,9 @@ module Isuports
 
         now = Time.now.to_i
         id = dispense_id
+        tenant_db.transaction(:exclusive)
         tenant_db.execute('INSERT INTO competition (id, tenant_id, title, finished_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [id, v.tenant_id, title, nil, now, now])
+        tenant_db.commit()
 
         json(
           status: true,
@@ -572,7 +578,9 @@ module Isuports
         end
 
         now = Time.now.to_i
+        tenant_db.transaction(:exclusive)
         tenant_db.execute('UPDATE competition SET finished_at = ?, updated_at = ? WHERE id = ?', [now, now, id])
+        tenant_db.commit()
         json(
           status: true,
         )
@@ -745,6 +753,7 @@ module Isuports
       end
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
+        tenant_db.transaction()
         self.class.trace_execution_scoped(['#raking :authorize_player!']) do
           authorize_player!(tenant_db, v.player_id)
         end
@@ -774,7 +783,6 @@ module Isuports
           end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        tenant_db.transaction()
         rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
         tenant_db.commit()
         ranks = []
