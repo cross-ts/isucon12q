@@ -791,7 +791,8 @@ module Isuports
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
         self.class.trace_execution_scoped(['#raking :flock']) do
-        flock_by_tenant_id(v.tenant_id) do
+        tenant_db.transaction
+        #flock_by_tenant_id(v.tenant_id) do
           ranks = []
           scored_player_set = Set.new
           self.class.trace_execution_scoped(['#raking :flock execute']) do
@@ -844,7 +845,8 @@ module Isuports
               ranks: paged_ranks,
             },
           )
-        end
+        #end
+        tenant_db.commit
         end
       end
     end
