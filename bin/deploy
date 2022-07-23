@@ -7,7 +7,7 @@ cd ${ISUCON_GIT_DIR}
 git stash save -u tmp
 git pull --rebase
 
-if [[ "_${DEPLOY_SCRIPT_SUM}" != "_$(md5sum "$0")"]]; then
+if [ "_${DEPLOY_SCRIPT_SUM}" != "_$(md5sum "$0")"]; then
   echo 'bin/deploy updated!!!'
   exit 1
 fi
