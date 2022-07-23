@@ -764,7 +764,7 @@ module Isuports
         competition_id = params[:competition_id]
 
         # 大会の存在確認
-        competition == nil
+        competition = nil
         self.class.trace_execution_scoped(['#raking :retrieve_competition']) do
           competition = retrieve_competition(tenant_db, competition_id)
           unless competition
