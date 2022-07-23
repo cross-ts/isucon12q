@@ -14,6 +14,9 @@ require 'sqlite3'
 
 require_relative 'sqltrace'
 
+require_relative 'patched_mysql2_client'
+require 'new_relic/agent/method_tracer'
+
 module Isuports
   class App < Sinatra::Base
     enable :logging
@@ -23,6 +26,8 @@ module Isuports
       register Sinatra::Reloader
     end
     helpers Sinatra::Cookies
+
+    extend ::NewRelic::Agent::MethodTracer
 
     before do
       cache_control :private
@@ -913,3 +918,5 @@ module Isuports
     end
   end
 end
+
+require_relative 'method_tracer'
