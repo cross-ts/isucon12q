@@ -6,6 +6,7 @@ require 'mysql2'
 require 'mysql2-cs-bind'
 require 'open3'
 require 'openssl'
+require 'securerandom'
 require 'set'
 require 'sinatra/base'
 require 'sinatra/cookies'
@@ -140,6 +141,7 @@ module Isuports
 
       # システム全体で一意なIDを生成する
       def dispense_id
+        return SecureRandom.uuid
         last_exception = nil
         100.times do |i|
           begin
