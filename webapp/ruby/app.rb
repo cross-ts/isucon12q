@@ -612,42 +612,38 @@ module Isuports
 
         csv_file = nil
         csv = nil
-        self.class.trace_execution_scoped(['#score :csv']) do
-          csv_file = params[:scores][:tempfile]
-          csv_file.set_encoding(Encoding::UTF_8)
-          csv = CSV.new(csv_file, headers: true, return_headers: true)
-          csv.readline
-          if csv.headers != ['player_id', 'score']
-            raise HttpError.new(400, 'invalid CSV headers')
-          end
+        csv_file = params[:scores][:tempfile]
+        csv_file.set_encoding(Encoding::UTF_8)
+        csv = CSV.new(csv_file, headers: true, return_headers: true)
+        csv.readline
+        if csv.headers != ['player_id', 'score']
+          raise HttpError.new(400, 'invalid CSV headers')
         end
 
         # DELETEしたタイミングで参照が来ると空っぽのランキングになるのでロックする
         player_score_rows = []
-        self.class.trace_execution_scoped(['#score :player_score_row']) do
-          player_score_rows = csv.map.with_index do |row, row_num|
-            if row.size != 2
-              raise "row must have two columns: #{row}"
-            end
-            player_id, score_str = *row.values_at('player_id', 'score')
-            unless retrieve_player(tenant_db, player_id)
-              # 存在しない参加者が含まれている
-              raise HttpError.new(400, "player not found: #{player_id}")
-            end
-            score = Integer(score_str, 10)
-            id = dispense_id
-            now = Time.now.to_i
-            PlayerScoreRow.new(
-              id:,
-              tenant_id: v.tenant_id,
-              player_id:,
-              competition_id:,
-              score:,
-              row_num:,
-              created_at: now,
-              updated_at: now,
-            )
+        player_score_rows = csv.map.with_index do |row, row_num|
+          if row.size != 2
+            raise "row must have two columns: #{row}"
           end
+          player_id, score_str = *row.values_at('player_id', 'score')
+          unless retrieve_player(tenant_db, player_id)
+            # 存在しない参加者が含まれている
+            raise HttpError.new(400, "player not found: #{player_id}")
+          end
+          score = Integer(score_str, 10)
+          id = dispense_id
+          now = Time.now.to_i
+          PlayerScoreRow.new(
+            id:,
+            tenant_id: v.tenant_id,
+            player_id:,
+            competition_id:,
+            score:,
+            row_num:,
+            created_at: now,
+            updated_at: now,
+          )
         end
 
         # 更新時のみexclusive lockに変更
@@ -766,19 +762,15 @@ module Isuports
 
       connect_to_tenant_db(v.tenant_id) do |tenant_db|
         tenant_db.transaction()
-        self.class.trace_execution_scoped(['#raking :authorize_player!']) do
-          authorize_player!(tenant_db, v.player_id)
-        end
+        authorize_player!(tenant_db, v.player_id)
 
         competition_id = params[:competition_id]
 
         # 大会の存在確認
         competition = nil
-        self.class.trace_execution_scoped(['#raking :retrieve_competition']) do
-          competition = retrieve_competition(tenant_db, competition_id)
-          unless competition
-            raise HttpError.new(404, 'competition not found')
-          end
+        competition = retrieve_competition(tenant_db, competition_id)
+        unless competition
+          raise HttpError.new(404, 'competition not found')
         end
 
         now = Time.now.to_i
