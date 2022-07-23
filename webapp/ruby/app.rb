@@ -305,13 +305,15 @@ module Isuports
         end
 
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        flock_by_tenant_id(tenant_id) do
+        #flock_by_tenant_id(tenant_id) do
+          tenant_db.transaction()
           # スコアを登録した参加者のIDを取得する
           tenant_db.execute('SELECT DISTINCT(player_id) FROM player_score WHERE tenant_id = ? AND competition_id = ?', [tenant_id, comp.id]) do |row|
             pid = row.fetch('player_id')
             # スコアが登録されている参加者
             billing_map[pid] = 'player'
           end
+          tenant_db.commit()
 
           # 大会が終了している場合のみ請求金額が確定するので計算する
           player_count = 0
@@ -336,7 +338,7 @@ module Isuports
             billing_visitor_yen: 10 * visitor_count,  # ランキングを閲覧だけした(スコアを登録していない)参加者は10円
             billing_yen: 100 * player_count + 10 * visitor_count,
           )
-        end
+        #end
       end
 
       def competitions_handler(v, tenant_db)
@@ -623,7 +625,7 @@ module Isuports
         end
 
         # DELETEしたタイミングで参照が来ると空っぽのランキングになるのでロックする
-        flock_by_tenant_id(v.tenant_id) do
+        #flock_by_tenant_id(v.tenant_id) do
           player_score_rows = csv.map.with_index do |row, row_num|
             if row.size != 2
               raise "row must have two columns: #{row}"
@@ -648,10 +650,13 @@ module Isuports
             )
           end
 
+          # 更新時のみexclusive lockに変更
+          tenant_db.transaction(:exclusive)
           tenant_db.execute('DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?', [v.tenant_id, competition_id])
           player_score_rows.each do |ps|
             tenant_db.execute('INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)', ps.to_h)
           end
+          tenant_db.commit()
 
           json(
             status: true,
@@ -659,7 +664,7 @@ module Isuports
               rows: player_score_rows.size,
             },
           )
-        end
+        #end
       end
     end
 
@@ -716,7 +721,8 @@ module Isuports
         end
         competitions = tenant_db.execute('SELECT * FROM competition WHERE tenant_id = ? ORDER BY created_at ASC', [v.tenant_id]).map { |row| CompetitionRow.new(row) }
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-        flock_by_tenant_id(v.tenant_id) do
+        #flock_by_tenant_id(v.tenant_id) do
+        tenant_db.transaction()
           player_score_rows = competitions.filter_map do |c|
             # 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
             row = tenant_db.get_first_row('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1', [v.tenant_id, c.id, player.id])
@@ -727,6 +733,7 @@ module Isuports
               nil
             end
           end
+        tenant_db.commit()
 
           scores = player_score_rows.map do |ps|
             comp = retrieve_competition(tenant_db, ps.competition_id)
@@ -743,7 +750,7 @@ module Isuports
               scores:,
             },
           )
-        end
+        #end
       end
     end
 
@@ -792,9 +799,11 @@ module Isuports
         # player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
         rows = []
         self.class.trace_execution_scoped(['#raking :flock']) do
-          flock_by_tenant_id(v.tenant_id) do
+          #flock_by_tenant_id(v.tenant_id) do
+          tenant_db.transaction()
             rows = tenant_db.execute('SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC', [tenant.id, competition_id])
-          end
+          tenant_db.commit()
+          #end
         end
         ranks = []
         scored_player_set = Set.new
