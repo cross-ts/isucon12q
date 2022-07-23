@@ -30,4 +30,14 @@ CREATE TABLE `visit_history` (
   INDEX `tenant_id_idx` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 
- ALTER TABLE visit_history ADD INDEX idx_2 (tenant_id, competition_id, player_id, created_at);
+CREATE TABLE `visit_history2` (
+  `player_id` varchar(255) NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `competition_id` varchar(255) NOT NULL,
+  `min_created_at` bigint NOT NULL,
+  PRIMARY KEY `pk` (`tenant_id`, `competition_id`, `player_id`, `min_created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO visit_history2 (`tenant_id`, `competition_id`, `player_id`, `min_created_at`)
+SELECT tenant_id, competition_id, player_id, MIN(created_at)
+FROM visit_history GROUP BY tenant_id, competition_id, player_id;

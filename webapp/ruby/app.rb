@@ -282,7 +282,8 @@ module Isuports
 
         # ランキングにアクセスした参加者のIDを取得する
         billing_map = {}
-        admin_db.xquery('SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id', tenant_id, comp.id).each do |vh|
+        admin_db.xquery('SELECT plyaer_id, min_created_at FROM visit_history2 WHERE tenant_id = ? AND competition_id = ?', tenant_id, comp.id).each do |vh|
+        #admin_db.xquery('SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id', tenant_id, comp.id).each do |vh|
           # competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
           if comp.finished_at && comp.finished_at < vh.fetch(:min_created_at)
             next
@@ -761,7 +762,8 @@ module Isuports
 
         now = Time.now.to_i
         tenant = TenantRow.new(admin_db.xquery('SELECT * FROM tenant WHERE id = ?', v.tenant_id).first)
-        admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
+        #admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', v.player_id, tenant.id, competition_id, now, now)
+        admin_db.xquery('INSERT INTO visit_history (player_id, tenant_id, competition_id, min_created_at) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE min_created_at = min_created_at' ,v.player_id, tenant.id, competition_id, now)
 
         rank_after_str = params[:rank_after]
         rank_after =
