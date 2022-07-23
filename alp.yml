@@ -4,6 +4,11 @@ reverse: true
 format: md
 output: count,1xx,2xx,3xx,4xx,5xx,method,uri,sum,avg,p99,sum_body,avg_body
 matching_groups:
+- /api/player/player/[a-z0-9]+
+- /api/player/competition/[a-z0-9]+/ranking
+- /api/organizer/competition/[a-z0-9]+/finish
+- /api/organizer/competition/[a-z0-9]+/score
+- /api/organizer/player/[a-z0-9]+/disqualified
 
 ltsv: {}
 json: {}
